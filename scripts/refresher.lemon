@@ -1,0 +1,25 @@
+#if AIRFRESHENER
+
+function void Extras.initExtrasEntries()
+{
+	//Name, image, function to call
+	
+    base.Extras.initExtrasEntries()
+
+	Extras.addExtrasEntry("Sound Test", "secret_soundtest", "EntryFunctions.SoundTest")
+}
+
+function void EntryFunctions.SoundTest()
+{
+	EntryFunctions.sharedInit()
+    FadeOutScreenBlocking()
+    Audio.stopChannel(0)
+	System.setupCallFrame("GameModeControlLoop", "@EntryPoint")
+	System.setupCallFrame("CompetitionMode.MainMenu")
+
+	global.game_mode = 0x38		// Competition Mode menu
+    IsSoundTest = true
+	InitSaveSlots()
+}
+
+#endif

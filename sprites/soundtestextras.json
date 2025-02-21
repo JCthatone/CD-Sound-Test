@@ -1,0 +1,4 @@
+{
+    "secret_soundtest": { "File": "soundtestextras.png", "Rect": "0,0,64,48" },
+    "soundtest_bg": { "File": "soundtest_bg.png", "Rect": "0,0,416,224", "Center": "-46,0"}
+}

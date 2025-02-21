@@ -1,0 +1,502 @@
+// Sound Test Menu
+
+include refresher
+
+global string EasterEgg
+global bool IsSoundTest
+
+//# address-hook(0x00a85e) end(0x00aa24)
+function void CompetitionMode.MainMenu()
+{
+	if (!IsSoundTest)
+	{
+		base.CompetitionMode.MainMenu()
+		return
+	}
+
+	// Load palette for the background
+	{
+		copyMemory(0xfffffc00, 0x39d262, 0x20)
+		for (u32 i = 0; i < 0x20; ++i)
+		{
+			u16[0xfffffc00 + i * 2] = blendColorsPacked(u16[0xfffffc00 + i * 2], 0x0eee, 0x80)
+		}
+
+		copyMemory(0xfffffc80, 0xfffffc00, 0x20)
+		for (u32 i = 0; i < 0x20; ++i)
+		{
+			Renderer.setPaletteColor(i, unpackColor(u16[0xfffffc80 + i * 2]))
+		}
+	}
+
+	u8 selectedOption = 0
+	u8 PCM = 0
+	u8 DA.NO = 0
+
+	constant float KEY_REPEAT_TIMEOUT = 0.4f
+	constant float KEY_REPEAT_DELAY   = 0.125f
+	float keyRepeatTimer = KEY_REPEAT_TIMEOUT
+	s8 lastPressedInput = -1
+	u32 frameCounter = 0
+
+	constant u8 RESULT_NONE       = 0
+	constant u8 RESULT_GO_BACK    = 1
+	constant u8 RESULT_DO_EASTER  = 2
+
+	u8 result = RESULT_NONE
+	while (result == RESULT_NONE)
+	{
+		Renderer.resetSprites()
+
+		s16 anchorX = getScreenWidth() / 2
+		float deltaSeconds = 1.0f / 60.0f
+		++frameCounter
+		SoundTest.HandleFadeIn(frameCounter)
+		SoundTest.DrawBackground()
+
+		SoundTest.DrawMenu(selectedOption, PCM, DA.NO, anchorX)
+
+		waitForNextFrame()
+
+		// Handle key repeat
+		s8 currentInput = -1
+		{
+			if (Input.buttonPressed(BUTTON_UP))
+				currentInput = BUTTON_UP
+			else if (Input.buttonPressed(BUTTON_DOWN))
+				currentInput = BUTTON_DOWN
+			else if (Input.buttonPressed(BUTTON_LEFT))
+				currentInput = BUTTON_LEFT
+			else if (Input.buttonPressed(BUTTON_RIGHT))
+				currentInput = BUTTON_RIGHT
+			else if (lastPressedInput >= 0 && Input.buttonDown(lastPressedInput))
+				currentInput = lastPressedInput
+
+			lastPressedInput = currentInput
+
+			if (currentInput == -1)
+			{
+				// No input at all, so reset key repeat
+				keyRepeatTimer = KEY_REPEAT_TIMEOUT
+			}
+			else if (Input.buttonPressed(currentInput))
+			{
+				// Input pressed for the first frame now
+				keyRepeatTimer = KEY_REPEAT_TIMEOUT
+			}
+			else
+			{
+				// Input held down
+				keyRepeatTimer -= deltaSeconds
+				if (keyRepeatTimer <= 0.001f)
+					keyRepeatTimer = KEY_REPEAT_DELAY
+				else
+					currentInput = -1
+			}
+		}
+
+		s8 optionChange = (currentInput == BUTTON_UP) ? -1 : (currentInput == BUTTON_DOWN) ? 1 : 0
+		if (optionChange != 0)
+		{
+			if (selectedOption == 0)
+			{
+				if (optionChange == -1)
+				{
+					++PCM
+					if (PCM > 168) //last song is number 40, NO WAY! Can you believe that?
+						PCM = 0
+				}
+				else
+				{
+					--PCM
+					if (PCM > 168)
+						PCM = 168
+				}
+			}
+			else
+			{
+				if (optionChange == -1)
+				{
+					++DA.NO
+					if (DA.NO > 50) //last song is number 40, NO WAY! Can you believe that?
+						DA.NO = 0
+				}
+				else
+				{
+					--DA.NO
+					if (DA.NO > 50)
+						DA.NO = 50
+				}
+			}
+		}
+
+		s8 IDChange = (currentInput == BUTTON_LEFT) ? -1 : (currentInput == BUTTON_RIGHT) ? 1 : 0
+		if (IDChange != 0)
+			selectedOption = (IDChange == -1) ? 0 : 1
+
+		if (Input.buttonPressed(BUTTON_B) || Input.buttonPressed(BUTTON_BACK))
+		{
+			result = 1
+		}
+		else if (Input.buttonPressed(BUTTON_START))
+		{
+			result = 2
+		}
+		if (Input.buttonPressed(BUTTON_A))
+		{
+			if (selectedOption != 0)
+				playMusic(DA.NO)
+			else
+			{
+				playSound(PCM + 0x33) 
+				Audio.stopChannel(0) // stop the music so the sfx are clear
+			}
+		}
+	}
+
+	if (result == RESULT_GO_BACK)
+	{
+		IsSoundTest = false
+		playSound(0xad)
+
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+
+		// Do not fade out music in this case, Data Select music is meant to keep playing
+		Game.returnToMainMenu()
+		yieldExecution()
+	}
+	else if (result == RESULT_DO_EASTER)
+	{
+		SoundTest.DoEasterEgg(PCM, DA.NO)
+	}
+}
+
+function void SoundTest.HandleFadeIn(u32 frameCounter)
+{
+	if (frameCounter <= 0x18)
+	{
+		// Fade from black
+		u16 blendFactorR = clamp(s32(frameCounter - 0x08) * 0x14, 0, 0x100)
+		u16 blendFactorG = clamp(s32(frameCounter - 0x04) * 0x14, 0, 0x100)
+		u16 blendFactorB = clamp(    frameCounter         * 0x14, 0, 0x100)
+
+		for (u32 i = 0; i < 0x20; ++i)
+		{
+			u32 color = unpackColor(u16[0xfffffc00 + i * 2])
+			u32 r = (( color        & 0xff) * blendFactorR) >> 8
+			u32 g = (((color >> 8)  & 0xff) * blendFactorG) >> 8
+			u32 b = (((color >> 16) & 0xff) * blendFactorB) >> 8
+			color = r + (g << 8) + (b << 16)
+
+			u16[0xfffffc80 + i * 2] = packColor(color)
+			Renderer.setPaletteColor(i, color)
+		}
+
+		globalComponentTintColorR = blendFactorR
+		globalComponentTintColorG = blendFactorG
+		globalComponentTintColorB = blendFactorB
+	}
+}
+
+global string CDSTBG
+
+function void SoundTest.DrawBackground()
+{
+	// Background
+	SpriteHandle spr = Renderer.addSpriteHandle(((CDSTBG == 1) ? "soundtest_bg" : "bg_dataselect"), s16(getScreenWidth() - 512) / 2, 0, 0x5000)
+	spr.setBlendMode(BlendMode.OPAQUE)
+
+	Renderer.enableDefaultPlane(0, false)
+	Renderer.enableDefaultPlane(1, false)
+	Renderer.enableDefaultPlane(2, false)
+	Renderer.enableDefaultPlane(3, false)
+}
+
+function void SoundTest.DrawMenu(u8 selectedOption, u8 PCM, u8 DA.NO, s16 anchorX)
+{
+	// Title text
+	Renderer.drawText(ActSelect.TITLE_FONT, anchorX, 12, " SOUND TEST", 0xffffffff, 5, 0, 0xf010, false, true)
+
+	constant array<s16> TEXT_LINE_X = {111, 233}
+	for (u32 entryIndex = 0; entryIndex < 2; ++entryIndex)
+	{
+		bool isSelected = (entryIndex == selectedOption)
+		u32 color = isSelected ? 0xffff00ff : 0xffffffe8
+
+		bool canGoLeft = false
+		bool canGoRight = false
+
+		string text
+		if (entryIndex == 0)
+		{
+			text = stringformat("PCM: %d", PCM)
+		}
+		else
+		{
+			text = stringformat("DA NO: %d", DA.NO)
+		}
+
+		s16 px = TEXT_LINE_X[entryIndex]
+		s16 py = getScreenHeight() / 2
+
+		s16 arrowAnimOffset = 0
+		if (isSelected)
+		{
+			float seconds = global.framecounter / 60.0f
+			arrowAnimOffset = Math.roundToInt(seconds * 6.0f) % 6
+			arrowAnimOffset = (arrowAnimOffset > 3) ? (6 - arrowAnimOffset) : arrowAnimOffset
+		}
+
+		Renderer.drawText(ActSelect.MENU_FONT, px + 29, py, text, color, 5, 0, 0xf000, false, true)
+	}
+}
+
+function void SoundTest.DoEasterEgg(u8 PCM, u8 DA.NO)
+{
+	if (PCM == 12 && DA.NO == 25)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "Mazin"
+	}
+	else if (PCM == 19 && DA.NO == 06)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "SideRap"
+	}
+	else if (PCM == 17 && DA.NO == 10)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "StaffRoom"
+	}
+	else if (PCM == 93 && DA.NO == 19)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "Rosy"
+	}
+	else if (PCM == 03 && DA.NO == 02)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "Bitch"
+	}
+	else if (PCM == 29 && DA.NO == 06)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "Jolyne"
+	}
+	else if (PCM == 21 && DA.NO == 04)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "NextLevel"
+	}
+	else if (PCM == 62 && DA.NO == 27)
+	{
+		call 0x00aa2a
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+		EasterEgg = "Eggs"
+	}
+	else
+	{
+		IsSoundTest = false
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+
+		// Do not fade out music in this case, Data Select music is meant to keep playing
+		Game.returnToMainMenu()
+		yieldExecution()
+	}
+}
+
+//# address-hook(0x00ab90) end(0x00af1c)
+function void CompetitionMode.StageSelect()
+{
+	if (!IsSoundTest)
+	{
+		base.CompetitionMode.StageSelect()
+		return
+	}
+
+	// Load palette for the background
+	{
+		copyMemory(0xfffffc00, 0x39d262, 0x20)
+		for (u32 i = 0; i < 0x20; ++i)
+		{
+			u16[0xfffffc00 + i * 2] = blendColorsPacked(u16[0xfffffc00 + i * 2], 0x0eee, 0x80)
+		}
+
+		copyMemory(0xfffffc80, 0xfffffc00, 0x20)
+		for (u32 i = 0; i < 0x20; ++i)
+		{
+			Renderer.setPaletteColor(i, unpackColor(u16[0xfffffc80 + i * 2]))
+		}
+	}
+
+	SoundTestSetupMusic()
+
+	constant float KEY_REPEAT_TIMEOUT = 0.4f
+	constant float KEY_REPEAT_DELAY   = 0.125f
+	float keyRepeatTimer = KEY_REPEAT_TIMEOUT
+	s8 lastPressedInput = -1
+	u32 frameCounter = 0
+
+	constant u8 RESULT_NONE       = 0
+	constant u8 RESULT_GO_BACK    = 1
+
+	u8 result = RESULT_NONE
+	while (result == RESULT_NONE)
+	{
+		Renderer.resetSprites()
+
+		s16 anchorX = getScreenWidth() / 2
+		float deltaSeconds = 1.0f / 60.0f
+		++frameCounter
+		SoundTest.HandleFadeIn(frameCounter)
+		SoundTest.DrawEasterEgg()
+
+		waitForNextFrame()
+		// Handle key repeat
+		s8 currentInput = -1
+		{
+			if (Input.buttonPressed(BUTTON_UP))
+				currentInput = BUTTON_UP
+			else if (Input.buttonPressed(BUTTON_DOWN))
+				currentInput = BUTTON_DOWN
+			else if (Input.buttonPressed(BUTTON_LEFT))
+				currentInput = BUTTON_LEFT
+			else if (Input.buttonPressed(BUTTON_RIGHT))
+				currentInput = BUTTON_RIGHT
+			else if (lastPressedInput >= 0 && Input.buttonDown(lastPressedInput))
+				currentInput = lastPressedInput
+
+			lastPressedInput = currentInput
+
+			if (currentInput == -1)
+			{
+				// No input at all, so reset key repeat
+				keyRepeatTimer = KEY_REPEAT_TIMEOUT
+			}
+			else if (Input.buttonPressed(currentInput))
+			{
+				// Input pressed for the first frame now
+				keyRepeatTimer = KEY_REPEAT_TIMEOUT
+			}
+			else
+			{
+				// Input held down
+				keyRepeatTimer -= deltaSeconds
+				if (keyRepeatTimer <= 0.001f)
+					keyRepeatTimer = KEY_REPEAT_DELAY
+				else
+					currentInput = -1
+			}
+		}
+
+		s8 entryChange = (currentInput == BUTTON_UP) ? -1 : (currentInput == BUTTON_DOWN) ? 1 : 0
+		s8 optionChange = (currentInput == BUTTON_LEFT) ? -1 : (currentInput == BUTTON_RIGHT) ? 1 : 0
+		if (Input.buttonPressed(BUTTON_B) || Input.buttonPressed(BUTTON_BACK) || Input.buttonPressed(BUTTON_START))
+		{
+			result = 1
+		}
+	}
+
+	if (result == RESULT_GO_BACK)
+	{
+		IsSoundTest = false
+		playSound(0xad)
+
+		u32 backupA0 = A0
+		FadeOutScreenBlocking()
+		A0 = backupA0
+
+		// Do not fade out music in this case, Data Select music is meant to keep playing
+		Game.returnToMainMenu()
+		yieldExecution()
+	}
+}
+
+function void SoundTest.DrawEasterEgg()
+{
+	//jolyne text
+	if (EasterEgg == "Jolyne")
+		Renderer.drawCustomSprite("Text_Joyline", (getScreenWidth() / 2), (getScreenHeight() / 2) - 103, 0, 0, 0xffff)
+
+	// Easter Egg
+	SpriteHandle spr = Renderer.addSpriteHandle(stringformat("SoundTestEasterEgg_%s", EasterEgg), s16(getScreenWidth() - 512) / 2, 0, 0x5000)
+	spr.setBlendMode(BlendMode.OPAQUE)
+
+	//BG
+	Renderer.drawRect(0, 0, 550, 224, 0x000000ff, 0x4999, false)
+
+	Renderer.enableDefaultPlane(0, false)
+	Renderer.enableDefaultPlane(1, false)
+	Renderer.enableDefaultPlane(2, false)
+	Renderer.enableDefaultPlane(3, false)
+}
+
+function void SoundTestSetupMusic()
+{
+	if (EasterEgg == "Mazin")
+		playSound(MUSIC_CONTINUE)
+	else if (EasterEgg == "MISCRap")
+		playSound(MUSIC_HCZ2)
+	else if (EasterEgg == "StaffRoom")
+		playSound(MUSIC_MGZ2)
+	else if (EasterEgg == "Rosy")
+		Audio.playAudio("07_proto", AudioContext.CONTEXT_MUSIC)
+	else if (EasterEgg == "Bitch")
+		playSound(MUSIC_CNZ2)
+	else if (EasterEgg == "Jolyne")
+		playSound(MUSIC_KNUCKLES)
+	else if (EasterEgg == "NextLevel")
+		playSound(MUSIC_CGZ)
+	else
+		playSound(MUSIC_MAINBOSS)
+}
+
+#if !AIRFRESHENER
+
+//# address-hook(0x007e64) end(0x007f1e)
+//# translated(0x007f46) end(0x007f60)
+function void fn007e64()
+{
+	if (levelselect.selection == 0x20 || Mods.isModActive("Sonic 3 Complete Level Select+") && levelselect.selection == 0x22) //sound test is in another selection with the S3C level select
+	{
+		// Sound test
+		if (control.pad1.pressed & CONTROL_START)
+		{
+			IsSoundTest = true
+			playSound(0xaf)
+			FadeOutScreenBlocking()
+			EntryFunctions.competitionMode()
+		}
+	}
+
+	base.fn007e64()
+}
+
+#endif

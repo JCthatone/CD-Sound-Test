@@ -1,0 +1,4 @@
+{
+    "Text_Origins": { "File": "text.png", "Rect": "0,0,200,23", "Center": "-100,0"},
+	"Text_Joyline": { "File": "text.png", "Rect": "0,24,240,15", "Center": "105,0"}
+}

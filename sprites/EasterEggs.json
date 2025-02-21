@@ -1,0 +1,10 @@
+{
+	"SoundTestEasterEgg_Mazin": { "File": "EasterEggs.png", "Rect": "0,0,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_SideRap": { "File": "EasterEggs.png", "Rect": "325,0,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_StaffRoom": { "File": "EasterEggs.png", "Rect": "0,228,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_Rosy": { "File": "EasterEggs.png", "Rect": "325,228,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_Bitch": { "File": "EasterEggs.png", "Rect": "650,0,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_Jolyne": { "File": "EasterEggs.png", "Rect": "650,228,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_NextLevel": { "File": "EasterEggs.png", "Rect": "975,0,320,224", "Center": "-100,0"},
+	"SoundTestEasterEgg_Eggs": { "File": "EasterEggs.png", "Rect": "975,228,320,224", "Center": "-100,0"}
+}
